@@ -1,7 +1,12 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
-require('dotenv').config();
+
+// Voeg hier de NODE_ENV-check toe
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
 const apiKey = process.env.OPENAI_API_KEY;
 
 const app = express();
