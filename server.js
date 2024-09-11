@@ -1,6 +1,8 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
+require('dotenv').config();
+const apiKey = process.env.OPENAI_API_KEY;
 
 const app = express();
 
