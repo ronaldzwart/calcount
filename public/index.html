@@ -8,11 +8,22 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 100%;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
             margin: 0 auto;
             padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4a4a4a;
             text-align: center;
-            box-sizing: border-box;
         }
         .date-nav {
             display: flex;
@@ -21,38 +32,39 @@
             margin-bottom: 20px;
         }
         #chartContainer {
-            width: 150px;
-            height: 150px;
+            width: 300px;
+            height: 300px;
             margin: 0 auto;
         }
         table {
             width: 100%;
-            margin-top: 20px;
             border-collapse: collapse;
+            margin-top: 20px;
         }
         th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             text-align: left;
+            border-bottom: 1px solid #ddd;
         }
         th {
             background-color: #f2f2f2;
         }
-        .add-button {
+        .button {
             background-color: #4CAF50;
             border: none;
             color: white;
-            padding: 15px;
+            padding: 10px 20px;
             text-align: center;
             text-decoration: none;
             display: inline-block;
-            font-size: 24px;
+            font-size: 16px;
             margin: 4px 2px;
             cursor: pointer;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            line-height: 50px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #45a049;
         }
         #imageInput {
             display: none;
@@ -60,64 +72,60 @@
         #loadingScreen {
             display: none;
             position: fixed;
-            top: 0;
+            z-index: 1000;
             left: 0;
+            top: 0;
             width: 100%;
             height: 100%;
             background-color: rgba(0,0,0,0.5);
             justify-content: center;
             align-items: center;
-            z-index: 1000;
         }
-        #loadingScreen div {
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
         }
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-            table {
-                font-size: 14px;
-            }
-            .add-button {
-                width: 40px;
-                height: 40px;
-                line-height: 40px;
-                font-size: 20px;
-            }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="date-nav">
-        <button onclick="changeDate(-1)">&#8249;</button>
-        <h2 id="currentDate"></h2>
-        <button onclick="changeDate(1)">&#8250;</button>
+    <div class="container">
+        <h1>CalCount</h1>
+        <div class="date-nav">
+            <button onclick="changeDate(-1)" class="button">&lt; Vorige dag</button>
+            <h2 id="currentDate"></h2>
+            <button onclick="changeDate(1)" class="button">Volgende dag &gt;</button>
+        </div>
+
+        <div id="chartContainer">
+            <canvas id="calorieChart"></canvas>
+        </div>
+
+        <p>Totaal calorieën: <span id="totalCalories">0</span> / 2200</p>
+
+        <table id="foodList">
+            <thead>
+                <tr>
+                    <th>Omschrijving</th>
+                    <th>Calorieën</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <input type="file" id="imageInput" accept="image/*" onchange="analyzeImage()">
+        <label for="imageInput" class="button">Voeg maaltijd toe</label>
     </div>
-
-    <div id="chartContainer">
-        <canvas id="calorieChart"></canvas>
-    </div>
-
-    <table id="foodList">
-        <thead>
-            <tr>
-                <th>Omschrijving</th>
-                <th>Calorieën</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-
-    <p>Totaal calorieën: <span id="totalCalories">0</span> / 2200</p>
-
-    <input type="file" id="imageInput" accept="image/*" onchange="analyzeImage()">
-    <label for="imageInput" class="add-button">+</label>
 
     <div id="loadingScreen">
-        <div>Even geduld a.u.b. De afbeelding wordt geanalyseerd...</div>
+        <div class="loader"></div>
     </div>
 
     <script>
@@ -127,13 +135,14 @@
         let chart;
 
         function updateDateDisplay() {
-            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('nl-NL', options);
         }
 
         function changeDate(days) {
             currentDate.setDate(currentDate.getDate() + days);
             updateDateDisplay();
+            loadDailyData();
             updateDailyData();
         }
 
@@ -212,11 +221,11 @@
                     const data = await response.json();
                     if (data.error) throw new Error(data.error);
 
-                    const calories = parseInt(data.calories);
-                    if (isNaN(calories)) throw new Error('Ongeldige calorie-waarde ontvangen');
-
-                    if (!dailyData[getDateKey()]) dailyData[getDateKey()] = [];
-                    dailyData[getDateKey()].push({ description: data.description, calories: calories });
+                    const dateKey = getDateKey();
+                    if (!dailyData[dateKey]) dailyData[dateKey] = [];
+                    dailyData[dateKey].push({ description: data.description, calories: data.calories });
+                    
+                    saveDailyData();
                     updateDailyData();
                 } catch (error) {
                     console.error('Error:', error);
@@ -234,7 +243,19 @@
             updateTotalCalories();
         }
 
+        function saveDailyData() {
+            localStorage.setItem('dailyData', JSON.stringify(dailyData));
+        }
+
+        function loadDailyData() {
+            const storedData = localStorage.getItem('dailyData');
+            if (storedData) {
+                dailyData = JSON.parse(storedData);
+            }
+        }
+
         // Initialize
+        loadDailyData();
         updateDateDisplay();
         updateDailyData();
     </script>
